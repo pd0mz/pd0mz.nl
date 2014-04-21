@@ -1,0 +1,150 @@
+---
+reader: jinja
+template: page
+---
+<h2>APRS iGate</h2>
+
+<div class="row">
+  <div class="col-md-6">
+    <pre>
+PD0MZ-10>APRS,TCPIP*:=5217.83N/00435.73E& Embedded iGate
+PD0MZ-10>APRS,TCPIP*:>Running on Open Source Software
+PD0MZ-10>APRS,TCPIP*:_04201535c070s021g000t068h50b10051PyMM
+</pre>
+  </div>
+  <div class="col-md-6">
+<script type="text/javascript">
+he_track = "PD0MZ-10"; // track this callsign
+</script>
+<script type="text/javascript" src="http://aprs.fi/js/embed.js">
+</script>
+  </div>
+</div>
+
+<h3>Quick specifications</h3>
+
+<div class="row">
+  <div class="col-md-6">
+    <dl>
+      <dt>Call sign</dt>
+      <dd><a href="http://aprs.fi/#!call=a%2FPD0MZ-10">PD0MZ-10</a></dd>
+      <dt>Radio interface</dt>
+      <dd>r820t DVB-T receiver dongle</dd>
+      <dt>Antenna</dt>
+      <dd>Homebrew 144.800 MHz vertical, 360&deg; azimuth, 20m altitude</dd>
+    </dl>
+  </div>
+  <div class="col-md-6">
+    <dl>
+      <dt>Platform</dt>
+      <dd>Raspberry Pi Model B (rev I)</dd>
+      <dt>Demodulator</dt>
+      <dd><a href="https://github.com/EliasOenal/multimon-ng/">multimon-ng</a> in
+        AFSK1200 mode</dd>
+      <dt>Software</dt>
+      <dd><a href="https://github.com/asdil12/pymultimonaprs">PyMultimonAPRS</a></dd>
+    </dl>
+  </div>
+</div>
+
+<h3>Setup</h3>
+
+<p>I'm going to spend too much detail on how to install all individual
+components, lots of people already wrote excellent articles about this.</p>
+
+<p>First of all, I went with vanilla <a
+href="http://www.raspbian.org/" style="text-decoration:line-through">Raspbian</a>
+<a href="http://www.archlinuxarm.org/">Arch Linux ARM</a> as the base operating
+system, because I like to have the most recent software.</p>
+
+<p>After getting the base setup done, make sure you have installed the <a
+href="http://osmocom.org/">Osmocom</a> drivers for the <a
+href="http://sdr.osmocom.org/trac/wiki/rtl-sdr">RTL-SDR range of devices</a>.
+After getting the drivers sorted, install <a
+href="https://github.com/EliasOenal/multimon-ng/">multimon-ng</a> as detailed
+on their installation page, and lastly install <a
+href="https://github.com/asdil12/pymultimonaprs">PyMultimonAPRS</a>.</p>
+
+<p>If you're also running <a href="http://www.archlinux.org/">Arch Linux</a>,
+these packages will get you going:</p>
+<ul>
+  <li><a
+  href="https://www.archlinux.org/packages/community/x86_64/rtl-sdr/">rtl-sdr</a>,
+  Driver for Realtek RTL2832U, allowing general purpose software defined
+  radio</li>
+  <li><a
+  href="https://aur.archlinux.org/packages/multimon-ng-git">multimon-ng-git</a>,
+  An sdr decoder, supports pocsag, ufsk, clipfsk, afsk, hapn, fsk, dtmf, zvei</a>
+  </li>
+  <li><a
+  href="https://aur.archlinux.org/packages/pymultimonaprs/">pymultimonaprs</a>,
+  HF2APRS-IG Gateway</li>
+  <li><a
+  href="https://aur.archlinux.org/packages/python2-pywapi/">python2-pywapi</a>,
+  Python wrapper around the Yahoo! Weather, Weather.com and NOAA APIs</li>
+</ul>
+
+<h3>WX</h3>
+
+<p>I have not yet hooked up my 433.92 MHz On-Off Keying weather station to the
+Raspberry Pi yet, so for the time being I'll be using online weather services
+from a station close by as my WX report source. There is a copy of the script
+<a href="https://gist.github.com/tehmaze/11124608">as a gist on GitHub</a>, add
+it in your crontab like so:</p>
+
+<pre>*/5 * * * * /usr/local/bin/wx.py NLXX0250 > /var/wx/weather.json</pre>
+
+<p>The <code>NLXX0250</code> code is the location short code for my QTH, you
+can lookup yours at <a
+href="https://www.edg3.co.uk/snippets/weather-location-codes/">edg3.co.uk</a>,
+they provide an online lookup service. After this, point <code>weather</code>
+in your <code>/etc/pymultimonaprs.json</code> configuration file to the
+location of the <code>weather.json</code> file.
+</p>
+
+<h3>ISS APRS</h3>
+
+<p>If you modify PyMultimonAPRS a bit, you can tell the multimon-ng demodulator
+to follow more than one frequency. The RTL-SDR dongle can capture about 3.2 MHz
+of bandwidth which is more than enough to monitor both the European 144.800 MHz
+APRS frequency and the ISS packet radio download frequency of 144.825 MHz.</p>
+
+<p>You can instruct <code>rtl_fm</code> to follow more than one frequency. You
+can enable multiple frequencies by editing
+<code>pymultimonaprs/multimon.py</code> and applying the following patch:</p>
+<pre>
+diff -ur pymultimonaprs.orig/pymultimonaprs/multimon.py pymultimonaprs/pymultimonaprs/multimon.py
+--- pymultimonaprs.orig/pymultimonaprs/multimon.py  2014-04-20 14:03:30.266307000 +0200
++++ pymultimonaprs/pymultimonaprs/multimon.py 2014-04-20 23:28:33.752000000 +0200
+@@ -30,8 +30,8 @@
+    else:
+      if self.config['source'] == 'rtl':
+        proc_src = subprocess.Popen(
+-         ['rtl_fm', '-f', str(int(self.config['rtl']['freq'] * 1e6)), '-s', '22050',
+-         '-p', str(self.config['rtl']['ppm']), '-g', str(self.config['rtl']['gain']), '-'],
++         ['rtl_fm', '-f', str(int(self.config['rtl']['freq'] * 1e6)), '-f', '145825000', '-s', '22050',
++         '-p', str(self.config['rtl']['ppm']), '-g', str(self.config['rtl']['gain']), '-l', '10', '-'],
+          stdout=subprocess.PIPE, stderr=open('/dev/null')
+        )
+      elif self.config['source'] == 'alsa':
+</pre>
+<p>Mind you that this enables the squelch functionality of <code>rtl_fm</code>
+using the <code>-l</code> flag. You may want to test different squelch values,
+your milage may vary.</p>
+
+<h3>What's next</h3>
+
+<p>So as mentioned before, I still have to hook up a local weather station to
+the setup, to give better localised WX. Also, the RTL-SDR dongle is working,
+but the radio is a bit deaf. Using a cheap hand held radio in conjunction with
+an <a href="https://sites.google.com/site/ki4mcw/Home/arduino-tnc">KI4MCW
+Arduino TNC</a> or a <a
+href="http://michaldemin.wordpress.com/2012/02/27/cheap-afsk-tnc/">OM5AMX
+STM32F100 TNC</a> may be nice options, or research decoding AFSK in the
+handheld
+radio itself using the <a
+href="http://www.elazary.com/index.php?option=com_content&view=category&id=14:baofeng-uv5r&Itemid=17&layout=default">KK6BWA
+Baofeng firmware hacks</a>. Also the <a
+href="http://tnc-x.com/TNCPi.htm">TNC-Pi</a> looks like a nice extension board,
+it's a TNC-X you can stack directly onto your Raspberry Pi board. You can even
+stack more than one unit.</p>

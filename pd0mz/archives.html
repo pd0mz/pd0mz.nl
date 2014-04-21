@@ -1,0 +1,22 @@
+---
+reader: jinja
+template: page
+title: archives
+---
+    <h2>Archives</h2>
+
+{% for date in site.archives|sort|reverse -%}
+  {% if date|length == 1 %}
+    {% set posts = site.archives[date] -%}
+    <h3>Posts for <a href="/{{ date[0] }}/">{{ date[0] }}</a></h3>
+    <ul>
+    {% for post in posts %}
+     <li>
+       <a href="{{ post.link }}">{{ post.title|escape }}</a>
+      {% if not day %}
+       <small>{{ post.date|date("%B %d") }}</small>
+      {% endif %}
+     </li>
+    {% endfor %}
+  {% endif -%}
+{% endfor -%}

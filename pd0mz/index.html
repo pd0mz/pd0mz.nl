@@ -1,0 +1,27 @@
+---
+reader: jinja
+template: page
+---
+{% set grouptrack = "" -%}
+{% set track = 0 %}
+{% for post in site.posts|reverse %}
+{% set track = track + 1 %}
+{% if track < 5 %}
+  <div class="row">
+    <br>
+    <div class="col-md-12">
+      <div class="row">
+        <div class="col-md-10">
+          <h3><a href="{{ post.link }}">{{ post.title }}</a></h3>
+        </div>
+        <div class="col-md-2">
+          {{ post.date }}
+        </div>
+      </div>
+      {{ post.content|first }}
+      &hellip; <a href="{{ post.link }}">read more</a>
+    </div>
+  </div>
+{% endif %}
+{% endfor %}
+  <a href="/archives.html" class="btn btn-primary pull-right btnNext">More <i class="glyphicon glyphicon-chevron-right"></i></a>
